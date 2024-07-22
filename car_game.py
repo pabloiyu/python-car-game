@@ -89,40 +89,56 @@ for image_filename in image_filenames:
 crash = pygame.image.load('images/crash.png')
 crash_rect = crash.get_rect()
 
+#P Functionality for letting LLM take actions in the game
+import os 
+import datetime
+from LLM_action import make_llm_move_car
+screenshot_counter = 0
+screenshot_interval = 60
+
+screenshot_dir = "screenshots"
+if not os.path.exists(screenshot_dir):
+    os.makedirs(screenshot_dir)
+    
+from openai import OpenAI
+from key import OPENAI_API_KEY
+llm_client = OpenAI(api_key=OPENAI_API_KEY)
+
 # game loop
 running = True
 while running:
     
     clock.tick(fps)
     
-    for event in pygame.event.get():
-        if event.type == QUIT:
-            running = False
+    #P Screenshot logic
+    if screenshot_counter % screenshot_interval == 0:
+        filename = f"{screenshot_dir}/car_game_screenshot.png"
+        pygame.image.save(screen, filename)
+        print(f"Screenshot saved: {filename}")
+        
+        # We now let the LLM take actions in the game
+        action = make_llm_move_car(llm_client, filename)
+        if action == "left" and player.rect.center[0] > left_lane:
+            player.rect.x -= 100
+        elif action == "right" and player.rect.center[0] < right_lane:
+            player.rect.x += 100
             
-        # move the player's car using the left/right arrow keys
-        if event.type == KEYDOWN:
-            
-            if event.key == K_LEFT and player.rect.center[0] > left_lane:
-                player.rect.x -= 100
-            elif event.key == K_RIGHT and player.rect.center[0] < right_lane:
-                player.rect.x += 100
+        for vehicle in vehicle_group:
+            if pygame.sprite.collide_rect(player, vehicle):
                 
-            # check if there's a side swipe collision after changing lanes
-            for vehicle in vehicle_group:
-                if pygame.sprite.collide_rect(player, vehicle):
-                    
-                    gameover = True
-                    
-                    # place the player's car next to other vehicle
-                    # and determine where to position the crash image
-                    if event.key == K_LEFT:
-                        player.rect.left = vehicle.rect.right
-                        crash_rect.center = [player.rect.left, (player.rect.center[1] + vehicle.rect.center[1]) / 2]
-                    elif event.key == K_RIGHT:
-                        player.rect.right = vehicle.rect.left
-                        crash_rect.center = [player.rect.right, (player.rect.center[1] + vehicle.rect.center[1]) / 2]
-            
-            
+                gameover = True
+                
+                # place the player's car next to other vehicle
+                # and determine where to position the crash image
+                if action == "left":
+                    player.rect.left = vehicle.rect.right
+                    crash_rect.center = [player.rect.left, (player.rect.center[1] + vehicle.rect.center[1]) / 2]
+                elif action == "right":
+                    player.rect.right = vehicle.rect.left
+                    crash_rect.center = [player.rect.right, (player.rect.center[1] + vehicle.rect.center[1]) / 2]
+        
+    screenshot_counter += 1
+
     # draw the grass
     screen.fill(green)
     
